@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { CheckCircle, XCircle, AlertTriangle, ChevronDown, ChevronUp, User } from 'lucide-react';
+import { CheckCircle, XCircle, AlertTriangle, ChevronDown, ChevronUp, User, Check, X, FileText, RefreshCw, Loader2 } from 'lucide-react';
+import { generateStudentPDF } from '../api';
+import toast from 'react-hot-toast';
 
 const ScoreBar = ({ score, max }) => {
   const pct = max > 0 ? (score / max) * 100 : 0;
@@ -28,13 +30,14 @@ const QuestionDot = ({ q }) => {
     return (
       <div
         title={`Q${q.question_no}: ${correct ? 'Correct (teacher)' : 'Wrong (teacher)'}`}
-        className={`w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold border ${
+        className={`w-7 h-7 rounded-md flex flex-col items-center justify-center text-[10px] font-bold border relative ${
           correct
             ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
             : 'bg-rose-500/20 border-rose-500/50 text-rose-400'
         }`}
       >
-        {q.question_no}
+        <span>{q.question_no}</span>
+        {correct ? <Check className="w-2.5 h-2.5 absolute -top-1 -right-1 bg-emerald-500 text-white rounded-full p-0.5" /> : <X className="w-2.5 h-2.5 absolute -top-1 -right-1 bg-rose-500 text-white rounded-full p-0.5" />}
       </div>
     );
   }
@@ -52,25 +55,49 @@ const QuestionDot = ({ q }) => {
   return (
     <div
       title={`Q${q.question_no}: ${correct ? `Correct (${q.selected_answer})` : `Wrong – chose ${q.selected_answer}, correct: ${q.correct_answer}`}`}
-      className={`w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold border ${
+      className={`w-7 h-7 rounded-md flex flex-col items-center justify-center text-[10px] font-bold border relative ${
         correct
           ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
           : 'bg-rose-500/15 border-rose-500/30 text-rose-400'
       }`}
     >
-      {q.question_no}
+      <span>{q.question_no}</span>
+      {correct ? <Check className="w-2.5 h-2.5 absolute -top-1 -right-1 bg-emerald-500 text-white rounded-full p-0.5" /> : <X className="w-2.5 h-2.5 absolute -top-1 -right-1 bg-rose-500 text-white rounded-full p-0.5" />}
     </div>
   );
 };
 
-export default function ScoreCard({ student, onOverride }) {
+export default function ScoreCard({ student, jobId, onOverride }) {
   const [expanded, setExpanded] = useState(false);
+  const [loadingPdf, setLoadingPdf] = useState(false);
+
+  const handleGeneratePdf = async (e) => {
+    e.stopPropagation();
+    setLoadingPdf(true);
+    try {
+      const resp = await generateStudentPDF(jobId, student.student_id);
+      // We update the local state via the parent if needed, 
+      // but here we can just update the student object since it's passed by ref in many React patterns 
+      // or just wait for the user to refresh. Better: use a toast.
+      student.annotated_pdf_path = resp.annotated_pdf_url.startsWith('/') 
+        ? resp.annotated_pdf_url.substring(1) 
+        : resp.annotated_pdf_url;
+      toast.success('File PDF đã được tạo!');
+    } catch (err) {
+      toast.error('Không thể tạo file PDF');
+    } finally {
+      setLoadingPdf(false);
+    }
+  };
   const pct = student.max_score > 0 ? (student.total_score / student.max_score) * 100 : 0;
   const grade =
     pct >= 90 ? { label: 'Excellent', color: 'text-emerald-400' } :
     pct >= 75 ? { label: 'Good',      color: 'text-brand-400' } :
     pct >= 60 ? { label: 'Pass',      color: 'text-amber-400' } :
                 { label: 'Fail',      color: 'text-rose-400' };
+
+  const correctCount = student.results.filter(q => q.score > 0).length;
+  const totalCount = student.results.length;
 
   return (
     <div className="glass rounded-xl overflow-hidden animate-slide-up">
@@ -107,8 +134,35 @@ export default function ScoreCard({ student, onOverride }) {
           <ScoreBar score={student.total_score} max={student.max_score} />
         </div>
 
-        <div className="text-right flex-shrink-0 mr-2">
-          <span className={`text-sm font-semibold ${grade.color}`}>{grade.label}</span>
+        <div className="text-right flex-shrink-0 mr-2 flex flex-col items-end gap-2">
+          <div className="flex flex-col items-end">
+            <span className={`text-sm font-bold ${grade.color}`}>{grade.label}</span>
+            <span className="text-[10px] text-slate-500 font-medium">Đúng: {correctCount}/{totalCount} câu</span>
+          </div>
+          
+          <div className="flex flex-col gap-1.5 items-end">
+            <button
+              onClick={handleGeneratePdf}
+              disabled={loadingPdf}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-navy-700 border border-white/10 text-[10px] text-slate-300 hover:bg-navy-600 hover:text-white transition-all font-semibold"
+            >
+              {loadingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+              {student.annotated_pdf_path ? 'Cập nhật PDF' : 'Tạo file PDF'}
+            </button>
+
+            {student.annotated_pdf_path && !loadingPdf && (
+              <a
+                href={`http://localhost:8001/${student.annotated_pdf_path.replace(/\\\\/g, '/')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500/20 border border-brand-500/40 text-[10px] text-brand-300 hover:bg-brand-500/30 hover:border-brand-500/60 transition-all font-bold uppercase tracking-wider"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                Tải PDF
+              </a>
+            )}
+          </div>
         </div>
 
         <div className="text-slate-500 flex-shrink-0">

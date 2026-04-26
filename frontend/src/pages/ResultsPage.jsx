@@ -102,7 +102,7 @@ export default function ResultsPage() {
           <h2 className="text-lg font-semibold text-white mb-4">Student Results</h2>
           <div className="space-y-3">
             {(job.students || []).map(s => (
-              <ScoreCard key={s.student_id} student={s} onOverride={async (student_id, question_no, decision) => {
+              <ScoreCard key={s.student_id} student={s} jobId={jobId} onOverride={async (student_id, question_no, decision) => {
                 try {
                   const resp = await import('../api').then(m => m.submitOverride(jobId, { student_id, question_no, decision }));
                   setJob(prev => {

@@ -15,6 +15,8 @@ from models import (
     ReviewOverrideResponse,
     StudentResult,
 )
+from services.pdf_annotator import annotate_student_pdf
+import os
 
 router = APIRouter(prefix="/review", tags=["review"])
 
@@ -63,6 +65,11 @@ def get_flagged_questions(job_id: str):
                             if student.name_crop_image_path
                             else None
                         ),
+                        "annotated_pdf_url": (
+                            f"/{student.annotated_pdf_path.replace(chr(92), '/')}"
+                            if student.annotated_pdf_path
+                            else None
+                        ),
                         "teacher_override": q.teacher_override,
                         "current_score": q.score,
                     }
@@ -106,12 +113,35 @@ def submit_override(job_id: str, payload: ReviewOverrideRequest):
         )
 
     # Apply override
+    if question.status == QuestionStatus.NEEDS_REVIEW:
+        student.flagged_count = max(0, student.flagged_count - 1)
+    
     question.teacher_override = payload.decision
     question.score = 1.0 if payload.decision == "correct" else 0.0
     question.status = QuestionStatus.REVIEWED
 
     # Recalculate student total
     student.total_score = _recalculate_total(student)
+
+    # Regenerate annotated PDF with new scores
+    # We need to find the student index
+    s_idx = next((i for i, s in enumerate(job.students) if s.student_id == payload.student_id), 0)
+    
+    # Regenerate annotated PDF ONLY when all flags for this student are resolved
+    if student.flagged_count == 0:
+        # Get original PDF path
+        upload_dir = os.getenv("UPLOAD_DIR", "uploads")
+        pdf_path = os.path.join(upload_dir, "pdfs", job.filename)
+
+        annotated_path = annotate_student_pdf(
+            pdf_path=pdf_path,
+            student_result=student,
+            student_idx=s_idx,
+            pages_per_student=job.pages_per_student,
+            output_dir=upload_dir,
+            job_id=job.job_id,
+        )
+        student.annotated_pdf_path = annotated_path
 
     # Check if all flags are resolved — update job status
     all_reviewed = all(

@@ -50,6 +50,7 @@ class QuestionResult(BaseModel):
     reason: AmbiguityReason = AmbiguityReason.NONE
     crop_image_path: Optional[str] = None      # relative URL for the crop
     teacher_override: Optional[str] = None     # "correct" | "wrong"
+    coord_y: Optional[float] = None            # Vertical position (0-1000) from AI
 
 
 # ---------------------------------------------------------------------------
@@ -64,6 +65,7 @@ class StudentResult(BaseModel):
     max_score: float = 0.0
     flagged_count: int = 0
     name_crop_image_path: Optional[str] = None # Crop for the student name/header
+    annotated_pdf_path: Optional[str] = None  # Path to the PDF with marks/scores
 
 
 # ---------------------------------------------------------------------------

@@ -43,7 +43,8 @@ The JSON must follow this exact schema:
       "selected_answer": "<A|B|C|D|null>",
       "status": "<auto_graded|needs_review>",
       "reason": "<none|multiple_marks_detected|crossed_out_answer|double_circled_option|low_confidence|unclear_mark|no_answer_detected>",
-      "ai_confidence": <float 0.0–1.0>
+      "ai_confidence": <float 0.0–1.0>,
+      "coord_y": <float 0-1000>
     }
   ]
 }
@@ -53,6 +54,7 @@ Rules:
 - Set status = "auto_graded" when you are confident in the answer.
 - selected_answer must be null if no answer can be determined.
 - ai_confidence reflects how certain you are about this single question's answer.
+- coord_y is the vertical position (0 to 1000, where 0 is top and 1000 is bottom) of the specific question row in the image. Be extremely precise.
 """
 
 

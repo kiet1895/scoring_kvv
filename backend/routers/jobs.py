@@ -7,7 +7,9 @@ from typing import List
 from fastapi import APIRouter, HTTPException
 
 import job_store
-from models import GradingJob, JobListItem, JobStatus
+from models import GradingJob, JobListItem, JobStatus, StudentResult
+from services.pdf_annotator import annotate_student_pdf
+import os
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -66,3 +68,33 @@ def delete_job(job_id: str):
     if not removed:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
     return {"message": f"Job {job_id} deleted"}
+
+
+@router.post("/{job_id}/students/{student_id}/generate-pdf")
+def generate_student_pdf_endpoint(job_id: str, student_id: str):
+    """Force generation of the annotated PDF for a specific student."""
+    job = job_store.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    student = next((s for s in job.students if s.student_id == student_id), None)
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+        
+    s_idx = next((i for i, s in enumerate(job.students) if s.student_id == student_id), 0)
+    
+    upload_dir = os.getenv("UPLOAD_DIR", "uploads")
+    pdf_path = os.path.join(upload_dir, "pdfs", job.filename)
+
+    annotated_path = annotate_student_pdf(
+        pdf_path=pdf_path,
+        student_result=student,
+        student_idx=s_idx,
+        pages_per_student=job.pages_per_student,
+        output_dir=upload_dir,
+        job_id=job.job_id,
+    )
+    student.annotated_pdf_path = annotated_path
+    job_store.update_job(job)
+    
+    return {"status": "success", "annotated_pdf_url": f"/{annotated_path.replace(os.sep, '/')}"}

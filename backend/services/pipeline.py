@@ -18,6 +18,7 @@ from models import (
 from services.pdf_splitter import split_pdf_into_students, get_answer_sheet_page
 from services.image_extractor import crop_question_region, crop_name_region
 from services.gemini_grader import grade_student_paper, build_demo_result
+from services.pdf_annotator import annotate_student_pdf
 
 DEMO_MODE = not bool(os.getenv("GEMINI_API_KEY"))
 
@@ -110,6 +111,7 @@ def run_grading_pipeline(
                         ai_confidence=confidence,
                         reason=AmbiguityReason(reason) if reason in [r.value for r in AmbiguityReason] else AmbiguityReason.NONE,
                         crop_image_path=crop_path,
+                        coord_y=float(q_data.get("coord_y")) if q_data.get("coord_y") is not None else None,
                     )
                 )
 
@@ -123,6 +125,22 @@ def run_grading_pipeline(
                 job_id=job_id,
             )
 
+            annotated_path = None
+            if flagged == 0:
+                annotated_path = annotate_student_pdf(
+                    pdf_path=pdf_path,
+                    student_result=StudentResult(
+                        student_id=student_id,
+                        results=question_results,
+                        total_score=total_score,
+                        max_score=float(total_questions),
+                    ),
+                    student_idx=idx,
+                    pages_per_student=pages_per_student,
+                    output_dir=upload_dir,
+                    job_id=job_id,
+                )
+
             return idx, local_has_review, StudentResult(
                 student_id=student_id,
                 paper_image_paths=image_paths,
@@ -131,6 +149,7 @@ def run_grading_pipeline(
                 max_score=float(total_questions),
                 flagged_count=flagged,
                 name_crop_image_path=name_crop_path,
+                annotated_pdf_path=annotated_path,
             )
 
         # Execute sequentially (max 1 worker) to strictly respect Gemini Free Tier limits (15 RPM)
