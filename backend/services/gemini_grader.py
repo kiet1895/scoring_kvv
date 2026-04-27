@@ -18,21 +18,26 @@ from PIL import Image
 # ---------------------------------------------------------------------------
 
 SYSTEM_INSTRUCTION = """
-You are an expert exam grader AI for multiple-choice bubble-sheet answer papers.
+You are an expert exam grader AI for multiple-choice answer papers.
 You will receive:
   1. An image of a student's answer sheet (one or more pages).
   2. The official answer key as a JSON object mapping question numbers to correct answers.
 
 Your task:
 - For each question in the answer key, determine which option (A, B, C, or D) the student selected.
-- Carefully detect ambiguous situations such as:
-    * Multiple bubbles filled for the same question
-    * A bubble that has been crossed out or erased and another filled
-    * A bubble that appears double-circled
-    * A mark that is unclear, very faint, or smudged
-    * No mark at all
+- The student may mark their choice by:
+    * Filling in a bubble or a box.
+    * Circling the letter (e.g., circling 'A') or the entire option.
+    * Placing a tick (check) or X mark inside or next to the option.
+    * Underlining the correct option.
+- LOOK EXTREMELY CLOSELY at all options for each question. A choice is considered "selected" if it has a clear mark (circle, fill, tick, etc.) that distinguishes it from the other choices.
+- Note: Question numbers on the paper might be labeled simply as '1', '2', ... or with Vietnamese prefixes like 'Câu 1', 'Câu 2', 'Bài 1', etc.
+- Carefully detect ambiguous situations:
+    * Multiple choices marked: if one is clearly crossed out/erased and another is marked, pick the marked one.
+    * If multiple are equally marked, set status="needs_review" and reason="multiple_marks_detected".
+    * If no clear mark is detected, set selected_answer=null and reason="no_answer_detected".
 
-Output ONLY valid JSON — no explanation, no markdown, no code fences.
+Output ONLY valid JSON.
 The JSON must follow this exact schema:
 
 {
@@ -48,24 +53,37 @@ The JSON must follow this exact schema:
     }
   ]
 }
-
-Rules:
-- Set status = "needs_review" when ai_confidence < 0.75 OR reason != "none".
-- Set status = "auto_graded" when you are confident in the answer.
-- selected_answer must be null if no answer can be determined.
-- ai_confidence reflects how certain you are about this single question's answer.
-- coord_y is the vertical position (0 to 1000, where 0 is top and 1000 is bottom) of the specific question row in the image. Be extremely precise.
 """
 
 
 # ---------------------------------------------------------------------------
-# Grader
+# Multi-Key Manager
 # ---------------------------------------------------------------------------
 
+class KeyManager:
+    def __init__(self):
+        raw_keys = os.getenv("GEMINI_API_KEY", "")
+        self.keys = [k.strip() for k in raw_keys.split(",") if k.strip()]
+        self.current_idx = 0
+        if not self.keys:
+            print("[WARNING] No GEMINI_API_KEY found in environment variables.")
+
+    def get_key(self):
+        if not self.keys:
+            return None
+        key = self.keys[self.current_idx]
+        self.current_idx = (self.current_idx + 1) % len(self.keys)
+        return key
+
+    def key_count(self):
+        return len(self.keys)
+
+_key_manager = KeyManager()
+
 def _configure_gemini() -> None:
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = _key_manager.get_key()
     if not api_key:
-        raise EnvironmentError("GEMINI_API_KEY environment variable not set.")
+        raise EnvironmentError("GEMINI_API_KEY not set or empty.")
     genai.configure(api_key=api_key)
 
 
@@ -95,8 +113,10 @@ def grade_student_paper(
     for attempt in range(max_retries):
         try:
             _configure_gemini()
+            model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+            print(f"[Gemini] Using model: {model_name} for student {student_id}")
             model = genai.GenerativeModel(
-                model_name="gemini-2.5-flash",
+                model_name=model_name,
                 system_instruction=SYSTEM_INSTRUCTION,
             )
 

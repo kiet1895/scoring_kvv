@@ -22,3 +22,8 @@ Thumbs.db
 
 # Gemini
 .gemini/
+
+# Runtime data
+backend/jobs.json
+uploads/
+*.pdf

@@ -70,6 +70,9 @@ def run_grading_pipeline(
                 ai_result = build_demo_result(student_id, answer_key)
             else:
                 ai_result = grade_student_paper(image_paths, answer_key, student_id)
+                # Small delay to respect RPM limits (15 RPM = ~4s per request)
+                import time
+                time.sleep(4)
 
             if ai_result is None:
                 ai_result = _fallback_needs_review(student_id, answer_key)
@@ -152,9 +155,12 @@ def run_grading_pipeline(
                 annotated_pdf_path=annotated_path,
             )
 
-        # Execute sequentially (max 1 worker) to strictly respect Gemini Free Tier limits (15 RPM)
+        # Adjust parallel workers based on available API keys
+        from services.gemini_grader import _key_manager
+        n_workers = max(1, _key_manager.key_count())
+        
         completed = 0
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as executor:
             future_to_student = {executor.submit(process_student, item): item for item in enumerate(students_pages)}
             for future in concurrent.futures.as_completed(future_to_student):
                 idx, local_has_review, s_result = future.result()

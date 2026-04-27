@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Plus, Trash2 } from 'lucide-react';
 import { uploadBatch } from '../api';
 import toast from 'react-hot-toast';
@@ -11,8 +11,22 @@ const DEFAULT_ANSWER_KEY = {
 export default function BatchUpload({ onJobCreated }) {
   const [file, setFile] = useState(null);
   const [dragging, setDragging] = useState(false);
-  const [pagesPerStudent, setPagesPerStudent] = useState(2);
-  const [answerKeyText, setAnswerKeyText] = useState(JSON.stringify(DEFAULT_ANSWER_KEY, null, 2));
+  const [pagesPerStudent, setPagesPerStudent] = useState(() => {
+    const saved = localStorage.getItem('pagesPerStudent');
+    return saved ? parseInt(saved, 10) : 2;
+  });
+  const [answerKeyText, setAnswerKeyText] = useState(() => {
+    const saved = localStorage.getItem('answerKeyText');
+    return saved || JSON.stringify(DEFAULT_ANSWER_KEY, null, 2);
+  });
+
+  useEffect(() => {
+    localStorage.setItem('pagesPerStudent', pagesPerStudent);
+  }, [pagesPerStudent]);
+
+  useEffect(() => {
+    localStorage.setItem('answerKeyText', answerKeyText);
+  }, [answerKeyText]);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [keyError, setKeyError] = useState(null);
