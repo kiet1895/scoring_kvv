@@ -108,7 +108,7 @@ export default function ScoreCard({ student, jobId, onOverride }) {
       >
         {/* Student name crop or fallback icon */}
         {student.name_crop_image_path ? (
-          <div className="h-12 max-w-[220px] rounded-lg overflow-hidden border border-white/10 bg-white flex-shrink-0">
+          <div className="h-14 max-w-[320px] rounded-lg overflow-hidden border border-white/10 bg-white flex-shrink-0">
             <img
               src={`http://localhost:8001/${student.name_crop_image_path.replace(/\\\\/g, '/')}`}
               alt={student.student_id}

@@ -95,10 +95,13 @@ def crop_name_region(
         img = Image.open(page_image_path)
         width, height = img.size
 
-        # Crop the top 15% of the page
-        area_bottom = int(height * ANSWER_AREA_TOP_FRACTION)
+        # Focus on the left-side name box (Họ và tên) - Extended width for long names
+        left = int(width * 0.10)
+        top = int(height * 0.05)
+        right = int(width * 0.52)
+        bottom = int(height * 0.15)
         
-        cropped = img.crop((0, 0, width, area_bottom))
+        cropped = img.crop((left, top, right, bottom))
 
         out_dir = Path(crop_output_dir) / job_id / "crops"
         out_dir.mkdir(parents=True, exist_ok=True)

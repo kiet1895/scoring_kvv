@@ -27,4 +27,3 @@ Thumbs.db
 backend/jobs.json
 uploads/
 *.pdf
-*.csv
