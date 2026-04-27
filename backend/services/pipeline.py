@@ -28,6 +28,7 @@ def run_grading_pipeline(
     pdf_path: str,
     answer_key: Dict[str, str],
     pages_per_student: int,
+    model_name: str,
     upload_dir: str,
 ) -> None:
     """
@@ -69,10 +70,10 @@ def run_grading_pipeline(
             if DEMO_MODE:
                 ai_result = build_demo_result(student_id, answer_key)
             else:
-                ai_result = grade_student_paper(image_paths, answer_key, student_id)
-                # Small delay to respect RPM limits (15 RPM = ~4s per request)
+                ai_result = grade_student_paper(image_paths, answer_key, student_id, model_name=model_name)
+                # Respect RPM limits (with AI processing time, 1s is very safe)
                 import time
-                time.sleep(4)
+                time.sleep(1)
 
             if ai_result is None:
                 ai_result = _fallback_needs_review(student_id, answer_key)

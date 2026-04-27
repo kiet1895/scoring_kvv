@@ -84,6 +84,7 @@ class GradingJob(BaseModel):
     created_at: Optional[str] = None
     pages_per_student: int = 2
     answer_key: dict = Field(default_factory=dict)  # {"1": "A", "2": "B", ...}
+    model_name: str = "gemini-2.5-flash"
 
 
 # ---------------------------------------------------------------------------

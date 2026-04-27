@@ -2,13 +2,24 @@ import { useState, useEffect, useCallback } from 'react';
 import BatchUpload from '../components/BatchUpload';
 import JobDashboard from '../components/JobDashboard';
 import { fetchJobs, fetchHealth } from '../api';
-import { BookOpen, Cpu, Wifi, WifiOff, RefreshCw } from 'lucide-react';
+import { BookOpen, Cpu, Wifi, WifiOff, RefreshCw, ChevronDown, Bot } from 'lucide-react';
 
 export default function Dashboard() {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [health, setHealth] = useState(null);
   const [polling, setPolling] = useState(false);
+  const [selectedModel, setSelectedModel] = useState(() => {
+    return localStorage.getItem('gemini_model') || 'gemini-2.5-flash';
+  });
+  const [showModelMenu, setShowModelMenu] = useState(false);
+
+  const models = [
+    { id: 'gemini-2.5-flash', name: '2.5 Flash', desc: 'Standard (Fast)' },
+    { id: 'gemini-2.0-flash', name: '2.0 Flash', desc: 'Efficiency' },
+    { id: 'gemini-2.5-pro', name: '2.5 Pro', desc: 'Premium Intelligence' },
+    { id: 'gemini-flash-latest', name: 'Flash Latest', desc: 'Always newest Flash' },
+  ];
 
   const loadJobs = useCallback(async () => {
     try {
@@ -35,18 +46,28 @@ export default function Dashboard() {
     loadHealth();
   }, [loadJobs, loadHealth]);
 
-  // Poll every 3s when there are active jobs
+  // Poll every 2s when there are active jobs
   useEffect(() => {
+    let intervalId;
     const hasActive = jobs.some(j => j.status === 'processing' || j.status === 'pending');
-    if (hasActive && !polling) {
-      setPolling(true);
-      const id = setInterval(loadJobs, 3000);
-      return () => { clearInterval(id); setPolling(false); };
+    
+    if (hasActive) {
+      intervalId = setInterval(loadJobs, 1000);
     }
-  }, [jobs, polling, loadJobs]);
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [jobs, loadJobs]);
 
   const handleJobCreated = () => {
     setTimeout(loadJobs, 1000);
+  };
+
+  const handleModelChange = (modelId) => {
+    setSelectedModel(modelId);
+    localStorage.setItem('gemini_model', modelId);
+    setShowModelMenu(false);
   };
 
   const handleJobDeleted = (jobId) => {
@@ -77,17 +98,53 @@ export default function Dashboard() {
           </div>
 
           <div className="flex items-center gap-4">
-            {/* Health indicator */}
+            {/* Health & Model indicator */}
             {health !== null && (
-              <div className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg ${
-                health.status === 'ok'
-                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                  : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-              }`}>
-                {health.status === 'ok' ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
-                {health.status === 'ok' ? (
-                  health.demo_mode ? '🎭 Demo Mode' : '🤖 Gemini Active'
-                ) : 'Backend Offline'}
+              <div className="flex items-center gap-1">
+                <div className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded-l-lg border-y border-l ${
+                  health.status === 'ok'
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                    : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                }`}>
+                  {health.status === 'ok' ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+                  {health.status === 'ok' ? (health.demo_mode ? 'Demo Mode' : 'Online') : 'Offline'}
+                </div>
+                
+                <div className="relative">
+                  <button
+                    onClick={() => setShowModelMenu(!showModelMenu)}
+                    className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-r-lg bg-navy-800 border border-white/10 text-slate-300 hover:bg-navy-700 hover:text-white transition-all"
+                  >
+                    <Bot className="w-3.5 h-3.5 text-brand-400" />
+                    <span className="font-semibold">{models.find(m => m.id === selectedModel)?.name}</span>
+                    <ChevronDown className={`w-3 h-3 transition-transform ${showModelMenu ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {showModelMenu && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setShowModelMenu(false)} />
+                      <div className="absolute right-0 mt-2 w-56 rounded-xl bg-navy-800 border border-white/10 shadow-2xl z-20 py-2 animate-fade-in">
+                        <div className="px-3 py-1 mb-1">
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Select AI Model</p>
+                        </div>
+                        {models.map(m => (
+                          <button
+                            key={m.id}
+                            onClick={() => handleModelChange(m.id)}
+                            className={`w-full px-4 py-2 text-left hover:bg-white/5 transition-colors flex flex-col ${
+                              selectedModel === m.id ? 'bg-brand-500/10' : ''
+                            }`}
+                          >
+                            <span className={`text-sm font-semibold ${selectedModel === m.id ? 'text-brand-400' : 'text-slate-200'}`}>
+                              {m.name}
+                            </span>
+                            <span className="text-[10px] text-slate-500">{m.desc}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             )}
 
@@ -112,7 +169,7 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 xl:grid-cols-[420px_1fr] gap-8 items-start">
           {/* Left: Upload panel */}
           <div className="xl:sticky xl:top-24">
-            <BatchUpload onJobCreated={handleJobCreated} />
+            <BatchUpload onJobCreated={handleJobCreated} modelName={selectedModel} />
           </div>
 
           {/* Right: Job list */}

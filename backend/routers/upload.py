@@ -31,6 +31,7 @@ async def upload_batch(
         description='JSON string mapping question numbers to answers. e.g. {"1":"A","2":"B"}'
     ),
     pages_per_student: int = Form(2, description="How many PDF pages = one student paper"),
+    model_name: str = Form("gemini-1.5-flash", description="Gemini model version to use"),
 ):
     """
     Upload a PDF batch and answer key to start grading.
@@ -60,6 +61,7 @@ async def upload_batch(
         status=JobStatus.PENDING,
         pages_per_student=pages_per_student,
         answer_key=answer_key,
+        model_name=model_name,
         created_at=datetime.now(timezone.utc).isoformat(),
     )
     job_store.create_job(job)
@@ -71,6 +73,7 @@ async def upload_batch(
         pdf_path=str(pdf_path),
         answer_key=answer_key,
         pages_per_student=pages_per_student,
+        model_name=model_name,
         upload_dir=UPLOAD_DIR,
     )
 

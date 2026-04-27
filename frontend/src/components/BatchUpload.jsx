@@ -8,7 +8,7 @@ const DEFAULT_ANSWER_KEY = {
   "6": "B", "7": "C", "8": "D", "9": "A", "10": "B"
 };
 
-export default function BatchUpload({ onJobCreated }) {
+export default function BatchUpload({ onJobCreated, modelName }) {
   const [file, setFile] = useState(null);
   const [dragging, setDragging] = useState(false);
   const [pagesPerStudent, setPagesPerStudent] = useState(() => {
@@ -70,6 +70,7 @@ export default function BatchUpload({ onJobCreated }) {
       fd.append('pdf_file', file);
       fd.append('answer_key_json', JSON.stringify(parsed));
       fd.append('pages_per_student', pagesPerStudent);
+      fd.append('model_name', modelName);
 
       const result = await uploadBatch(fd, setUploadProgress);
       toast.success(`Job created! ID: ${result.job_id.slice(0, 8)}…`);

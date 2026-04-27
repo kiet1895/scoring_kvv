@@ -18,24 +18,22 @@ from PIL import Image
 # ---------------------------------------------------------------------------
 
 SYSTEM_INSTRUCTION = """
-You are an expert exam grader AI for multiple-choice answer papers.
-You will receive:
-  1. An image of a student's answer sheet (one or more pages).
-  2. The official answer key as a JSON object mapping question numbers to correct answers.
+You are a highly precise exam grader AI. Your goal is to identify student answers with 100% accuracy and flag ANY ambiguity for human review.
 
-Your task:
-- For each question in the answer key, determine which option (A, B, C, or D) the student selected.
-- The student may mark their choice by:
-    * Filling in a bubble or a box.
-    * Circling the letter (e.g., circling 'A') or the entire option.
-    * Placing a tick (check) or X mark inside or next to the option.
-    * Underlining the correct option.
-- LOOK EXTREMELY CLOSELY at all options for each question. A choice is considered "selected" if it has a clear mark (circle, fill, tick, etc.) that distinguishes it from the other choices.
-- Note: Question numbers on the paper might be labeled simply as '1', '2', ... or with Vietnamese prefixes like 'Câu 1', 'Câu 2', 'Bài 1', etc.
-- Carefully detect ambiguous situations:
-    * Multiple choices marked: if one is clearly crossed out/erased and another is marked, pick the marked one.
-    * If multiple are equally marked, set status="needs_review" and reason="multiple_marks_detected".
-    * If no clear mark is detected, set selected_answer=null and reason="no_answer_detected".
+Your task for EACH question in the answer key:
+1. Independently scan every option (A, B, C, and D).
+2. Detect any marking (circle, tick, fill, underline, or X) on each option.
+3. COUNT the number of marked options:
+    - If MORE THAN ONE option is marked:
+        * If one is clearly crossed out (with a large X or strike-through) and another is clean, you may select the clean one.
+        * OTHERWISE (if two or more clear marks exist, like two circles), you MUST set status="needs_review", reason="multiple_marks_detected", and ai_confidence=0.0.
+        * In this case, set selected_answer to a string of all detected letters (e.g., "A,C").
+    - If EXACTLY ONE option is marked:
+        * Set status="auto_graded", selected_answer to that letter, and reason="none".
+    - If NO options are marked:
+        * Set status="needs_review", selected_answer=null, and reason="no_answer_detected".
+
+CRITICAL: If you see two circles (even if one is slightly lighter), it is a "multiple_marks_detected" case. Human safety first!
 
 Output ONLY valid JSON.
 The JSON must follow this exact schema:
@@ -45,9 +43,9 @@ The JSON must follow this exact schema:
   "results": [
     {
       "question_no": <integer>,
-      "selected_answer": "<A|B|C|D|null>",
+      "selected_answer": "<A|B|C|D|A,C|null>",
       "status": "<auto_graded|needs_review>",
-      "reason": "<none|multiple_marks_detected|crossed_out_answer|double_circled_option|low_confidence|unclear_mark|no_answer_detected>",
+      "reason": "<none|multiple_marks_detected|crossed_out_answer|low_confidence|no_answer_detected>",
       "ai_confidence": <float 0.0–1.0>,
       "coord_y": <float 0-1000>
     }
@@ -91,6 +89,7 @@ def grade_student_paper(
     image_paths: List[str],
     answer_key: Dict[str, str],
     student_id: str,
+    model_name: Optional[str] = None,
 ) -> Optional[dict]:
     """
     Send student answer sheet images to Gemini and get grading results.
@@ -100,6 +99,8 @@ def grade_student_paper(
         answer_key: Dict mapping question number strings to correct answers.
                     e.g. {"1": "A", "2": "C", ...}
         student_id: Identifier for logging purposes.
+        model_name: Gemini model version to use (e.g. "gemini-1.5-flash").
+                    If None, uses GEMINI_MODEL env var or default.
 
     Returns:
         Parsed JSON dict from Gemini, or None on failure.
@@ -113,10 +114,10 @@ def grade_student_paper(
     for attempt in range(max_retries):
         try:
             _configure_gemini()
-            model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
-            print(f"[Gemini] Using model: {model_name} for student {student_id}")
+            selected_model = model_name or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+            print(f"[Gemini] Using model: {selected_model} for student {student_id}")
             model = genai.GenerativeModel(
-                model_name=model_name,
+                model_name=selected_model,
                 system_instruction=SYSTEM_INSTRUCTION,
             )
 
