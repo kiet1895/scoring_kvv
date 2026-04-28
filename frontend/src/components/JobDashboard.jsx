@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Clock, CheckCircle, AlertTriangle, XCircle, ChevronRight, Download, Trash2, BarChart2, Eye, RotateCcw } from 'lucide-react';
+import { FileText, Clock, CheckCircle, AlertTriangle, XCircle, ChevronRight, Download, Trash2, BarChart2, Eye, RotateCcw, FileSpreadsheet } from 'lucide-react';
 import { deleteJob, exportCSV, fetchJob, retryJob } from '../api';
 import toast from 'react-hot-toast';
 
@@ -61,6 +61,12 @@ function JobRow({ job, onDeleted }) {
       await retryJob(job.job_id);
       toast.success('Retrying failed students...');
     } catch { toast.error('Failed to start retry'); }
+  };
+
+  const handleExportExcel = () => {
+    // Open the backend export URL in a new tab to trigger download
+    window.open(`http://localhost:8001/jobs/${job.job_id}/export-excel`, '_blank');
+    toast.success('Exporting Excel with images...');
   };
 
   return (
@@ -134,10 +140,17 @@ function JobRow({ job, onDeleted }) {
                 Results
               </button>
               <button
+                onClick={handleExportExcel}
+                className="w-8 h-8 rounded-lg bg-navy-700 border border-navy-600 text-slate-400 hover:text-emerald-400 hover:border-emerald-500/40 transition-colors flex items-center justify-center"
+                title="Export Excel (with Images)"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+              </button>
+              <button
                 onClick={handleExport}
                 disabled={exporting}
                 className="w-8 h-8 rounded-lg bg-navy-700 border border-navy-600 text-slate-400 hover:text-emerald-400 hover:border-emerald-500/40 transition-colors flex items-center justify-center"
-                title="Export CSV"
+                title="Export CSV (Text only)"
               >
                 <Download className="w-3.5 h-3.5" />
               </button>

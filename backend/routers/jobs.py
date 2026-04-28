@@ -5,6 +5,9 @@ from __future__ import annotations
 from typing import List
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi.responses import StreamingResponse
+import io
+import xlsxwriter
 
 import job_store
 from models import GradingJob, JobListItem, JobStatus, StudentResult
@@ -121,3 +124,87 @@ def retry_failed_students_endpoint(job_id: str, background_tasks: BackgroundTask
     )
     
     return {"message": "Retry started for failed students"}
+
+@router.get("/{job_id}/export-excel")
+def export_excel_endpoint(job_id: str):
+    """Generate an Excel file with student name images embedded."""
+    job = job_store.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    output = io.BytesIO()
+    workbook = xlsxwriter.Workbook(output)
+    worksheet = workbook.add_worksheet("Results")
+
+    # Define formats
+    header_fmt = workbook.add_format({
+        'bold': True, 'bg_color': '#1E293B', 'font_color': 'white',
+        'border': 1, 'align': 'center', 'valign': 'vcenter'
+    })
+    cell_fmt = workbook.add_format({
+        'border': 1, 'align': 'center', 'valign': 'vcenter'
+    })
+    
+    # Set column widths
+    worksheet.set_column('A:A', 15)  # Student ID
+    worksheet.set_column('B:B', 45)  # Name Crop
+    worksheet.set_column('C:C', 10)  # Score
+    worksheet.set_column('D:D', 10)  # Max
+    worksheet.set_column('E:E', 12)  # %
+    worksheet.set_column('F:F', 10)  # Flagged
+
+    # Header row
+    headers = ["Student ID", "Name Header (Image)", "Score", "Max Score", "Percentage", "Flagged"]
+    for col, text in enumerate(headers):
+        worksheet.write(0, col, text, header_fmt)
+    worksheet.set_row(0, 30) # Header height
+
+    # Data rows
+    for row_idx, s in enumerate(job.students, start=1):
+        # Set row height to fit image better
+        worksheet.set_row(row_idx, 60)
+        
+        pct = (s.total_score / s.max_score * 100) if s.max_score > 0 else 0
+        
+        worksheet.write(row_idx, 0, s.student_id, cell_fmt)
+        worksheet.write(row_idx, 2, s.total_score, cell_fmt)
+        worksheet.write(row_idx, 3, s.max_score, cell_fmt)
+        worksheet.write(row_idx, 4, f"{pct:.1f}%", cell_fmt)
+        worksheet.write(row_idx, 5, s.flagged_count, cell_fmt)
+
+        # Insert Image if exists
+        if s.name_crop_image_path and os.path.exists(s.name_crop_image_path):
+            try:
+                from PIL import Image as PILImage
+                with PILImage.open(s.name_crop_image_path) as img:
+                    img_w, img_h = img.size
+                
+                # Target dimensions in Excel (approx pixels)
+                # Col width 45 is ~335px, Row height 60 is ~80px
+                target_w = 330
+                target_h = 75
+                
+                scale_w = target_w / img_w
+                scale_h = target_h / img_h
+                scale = min(scale_w, scale_h, 1.0) # Don't upscale, only downscale
+                
+                worksheet.insert_image(row_idx, 1, s.name_crop_image_path, {
+                    'x_scale': scale,
+                    'y_scale': scale,
+                    'x_offset': 5,
+                    'y_offset': 3,
+                    'object_position': 1
+                })
+            except Exception as e:
+                print(f"Error inserting image: {e}")
+                worksheet.write(row_idx, 1, "[Image Error]", cell_fmt)
+
+    workbook.close()
+    output.seek(0)
+    
+    safe_filename = job.filename.replace('.pdf', '').replace(' ', '_')
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=Results_{safe_filename}.xlsx"}
+    )
