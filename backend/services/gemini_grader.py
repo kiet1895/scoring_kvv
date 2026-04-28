@@ -84,42 +84,36 @@ def _configure_gemini() -> None:
         raise EnvironmentError("GEMINI_API_KEY not set or empty.")
     genai.configure(api_key=api_key)
 
+import threading
+_genai_lock = threading.Lock()
 
 def grade_student_paper(
     image_paths: List[str],
     answer_key: Dict[str, str],
     student_id: str,
     model_name: Optional[str] = None,
-) -> Optional[dict]:
+) -> dict:
     """
     Send student answer sheet images to Gemini and get grading results.
-
-    Args:
-        image_paths: List of paths to rendered page images for this student.
-        answer_key: Dict mapping question number strings to correct answers.
-                    e.g. {"1": "A", "2": "C", ...}
-        student_id: Identifier for logging purposes.
-        model_name: Gemini model version to use (e.g. "gemini-1.5-flash").
-                    If None, uses GEMINI_MODEL env var or default.
-
-    Returns:
-        Parsed JSON dict from Gemini, or None on failure.
+    Returns a dict with 'results' on success, or 'error' on failure.
     """
     import time
     from google.api_core.exceptions import ResourceExhausted
 
     max_retries = 5
     base_delay = 10
+    last_error = "Unknown error"
 
     for attempt in range(max_retries):
         try:
-            _configure_gemini()
-            selected_model = model_name or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-            print(f"[Gemini] Using model: {selected_model} for student {student_id}")
-            model = genai.GenerativeModel(
-                model_name=selected_model,
-                system_instruction=SYSTEM_INSTRUCTION,
-            )
+            with _genai_lock:
+                _configure_gemini()
+                selected_model = model_name or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+                print(f"[Gemini] Using model: {selected_model} for student {student_id}")
+                model = genai.GenerativeModel(
+                    model_name=selected_model,
+                    system_instruction=SYSTEM_INSTRUCTION,
+                )
 
             # Build the prompt parts: images + answer key
             parts = []
@@ -134,6 +128,7 @@ def grade_student_paper(
             )
             parts.append(answer_key_text)
 
+            # Fire the AI request (Now outside the lock to allow parallelism)
             response = model.generate_content(
                 parts,
                 generation_config=genai.GenerationConfig(
@@ -153,21 +148,21 @@ def grade_student_paper(
             return result
 
         except json.JSONDecodeError as e:
-            print(f"[Gemini] JSON parse error for {student_id}: {e}")
-            if 'raw_text' in locals():
-                print(f"[Gemini] Raw response: {raw_text[:500]}")
-            return None
+            last_error = f"JSON parse error: {e}"
+            print(f"[Gemini] {last_error} for {student_id}")
+            return {"error": last_error}
         except Exception as e:
-            err_msg = str(e)
-            if "429" in err_msg or "Too Many Requests" in err_msg or isinstance(e, ResourceExhausted):
+            last_error = str(e)
+            if "429" in last_error or "Too Many Requests" in last_error or isinstance(e, ResourceExhausted):
                 if attempt < max_retries - 1:
                     print(f"[Gemini] 429 Too Many Requests for {student_id}. Sleeping {base_delay}s... (Attempt {attempt+1}/{max_retries})")
                     time.sleep(base_delay)
                     base_delay *= 1.5  # Exponential backoff
                     continue
             print(f"[Gemini] Error grading {student_id}: {e}")
-            return None
-    return None
+            return {"error": last_error}
+            
+    return {"error": f"Failed after {max_retries} attempts. Last error: {last_error}"}
 
 
 def build_demo_result(

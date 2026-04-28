@@ -66,6 +66,7 @@ class StudentResult(BaseModel):
     flagged_count: int = 0
     name_crop_image_path: Optional[str] = None # Crop for the student name/header
     annotated_pdf_path: Optional[str] = None  # Path to the PDF with marks/scores
+    error_message: Optional[str] = None       # Why it failed (e.g. 429 Quota)
 
 
 # ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CheckCircle, XCircle, AlertTriangle, ChevronDown, ChevronUp, User, Check, X, FileText, RefreshCw, Loader2 } from 'lucide-react';
+import { CheckCircle, XCircle, AlertTriangle, ChevronDown, ChevronUp, User, Check, X, FileText, RefreshCw, Loader2, Maximize2 } from 'lucide-react';
 import { generateStudentPDF } from '../api';
 import toast from 'react-hot-toast';
 
@@ -70,15 +70,13 @@ const QuestionDot = ({ q }) => {
 export default function ScoreCard({ student, jobId, onOverride }) {
   const [expanded, setExpanded] = useState(false);
   const [loadingPdf, setLoadingPdf] = useState(false);
+  const [showZoom, setShowZoom] = useState(false);
 
   const handleGeneratePdf = async (e) => {
     e.stopPropagation();
     setLoadingPdf(true);
     try {
       const resp = await generateStudentPDF(jobId, student.student_id);
-      // We update the local state via the parent if needed, 
-      // but here we can just update the student object since it's passed by ref in many React patterns 
-      // or just wait for the user to refresh. Better: use a toast.
       student.annotated_pdf_path = resp.annotated_pdf_url.startsWith('/') 
         ? resp.annotated_pdf_url.substring(1) 
         : resp.annotated_pdf_url;
@@ -89,31 +87,66 @@ export default function ScoreCard({ student, jobId, onOverride }) {
       setLoadingPdf(false);
     }
   };
+
+  const nameImageUrl = student.name_crop_image_path 
+    ? `http://localhost:8001/${student.name_crop_image_path.replace(/\\\\/g, '/')}`
+    : null;
+
   const pct = student.max_score > 0 ? (student.total_score / student.max_score) * 100 : 0;
   const grade =
-    pct >= 90 ? { label: 'Excellent', color: 'text-emerald-400' } :
-    pct >= 75 ? { label: 'Good',      color: 'text-brand-400' } :
-    pct >= 60 ? { label: 'Pass',      color: 'text-amber-400' } :
-                { label: 'Fail',      color: 'text-rose-400' };
+    pct >= 90 ? { label: 'Xuất sắc', color: 'text-emerald-400' } :
+    pct >= 75 ? { label: 'Giỏi',     color: 'text-brand-400' } :
+    pct >= 60 ? { label: 'Đạt',      color: 'text-amber-400' } :
+                { label: 'Chưa đạt',  color: 'text-rose-400' };
 
   const correctCount = student.results.filter(q => q.score > 0).length;
   const totalCount = student.results.length;
 
   return (
     <div className="glass rounded-xl overflow-hidden animate-slide-up">
+      {/* Zoom Modal */}
+      {showZoom && (
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-navy-950/90 backdrop-blur-md animate-fade-in"
+          onClick={(e) => { e.stopPropagation(); setShowZoom(false); }}
+        >
+          <div className="relative max-w-4xl w-full bg-white rounded-2xl overflow-hidden shadow-2xl animate-scale-up border-4 border-brand-500/20">
+            <button 
+              className="absolute top-4 right-4 p-2 bg-black/50 hover:bg-black/70 text-white rounded-full transition-all z-10"
+              onClick={() => setShowZoom(false)}
+            >
+              <XCircle className="w-6 h-6" />
+            </button>
+            <img src={nameImageUrl} alt="Zoomed Name" className="w-full h-auto block" />
+            <div className="bg-navy-900 px-6 py-4 border-t border-white/10 flex justify-between items-center">
+               <span className="text-white font-bold tracking-wide">PHÓNG TO TÊN HỌC SINH</span>
+               <span className="text-slate-400 text-sm font-mono">{student.student_id}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div
         className="px-5 py-4 flex items-center gap-4 cursor-pointer hover:bg-white/[0.02] transition-colors"
         onClick={() => setExpanded(e => !e)}
       >
         {/* Student name crop or fallback icon */}
-        {student.name_crop_image_path ? (
-          <div className="h-14 max-w-[320px] rounded-lg overflow-hidden border border-white/10 bg-white flex-shrink-0">
+        {nameImageUrl ? (
+          <div 
+            className="group relative h-20 max-w-[400px] rounded-lg overflow-hidden border border-white/10 bg-white flex-shrink-0 shadow-inner cursor-zoom-in"
+            onClick={(e) => { e.stopPropagation(); setShowZoom(true); }}
+          >
             <img
-              src={`http://localhost:8001/${student.name_crop_image_path.replace(/\\\\/g, '/')}`}
+              src={nameImageUrl}
               alt={student.student_id}
-              className="h-full w-auto object-contain"
+              className="h-full w-auto object-contain group-hover:scale-105 transition-transform duration-300"
             />
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+               <div className="bg-brand-500 text-white p-1.5 rounded-lg shadow-lg">
+                 <Maximize2 className="w-4 h-4" />
+               </div>
+            </div>
           </div>
         ) : (
           <div className="w-10 h-10 rounded-xl bg-brand-500/15 border border-brand-500/30 flex items-center justify-center flex-shrink-0">
@@ -132,6 +165,12 @@ export default function ScoreCard({ student, jobId, onOverride }) {
             )}
           </div>
           <ScoreBar score={student.total_score} max={student.max_score} />
+          {student.error_message && (
+            <p className="text-[10px] text-rose-400 mt-1 flex items-center gap-1 font-medium bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
+              <XCircle className="w-2.5 h-2.5" />
+              Lỗi: {student.error_message.includes("429") ? "Hết hạn mức (Quota 429). Hãy thêm API Key!" : student.error_message}
+            </p>
+          )}
         </div>
 
         <div className="text-right flex-shrink-0 mr-2 flex flex-col items-end gap-2">

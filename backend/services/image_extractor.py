@@ -14,10 +14,10 @@ from PIL import Image
 # These assume the answer bubbles are laid out in a single column/grid.
 # You can tune these percentages to match your actual paper layout.
 
-ANSWER_AREA_TOP_FRACTION = 0.15     # where answer rows start (% from top)
-ANSWER_AREA_BOTTOM_FRACTION = 0.90  # where answer rows end (% from top)
+ANSWER_AREA_TOP_FRACTION = 0.1     # where answer rows start (% from top)
+ANSWER_AREA_BOTTOM_FRACTION = 0.35  # where answer rows end (% from top)
 ANSWER_AREA_LEFT_FRACTION = 0.0     # left edge of the crop
-ANSWER_AREA_RIGHT_FRACTION = 1.0    # right edge of the crop
+ANSWER_AREA_RIGHT_FRACTION = 1.5    # right edge of the crop
 
 
 def crop_question_region(
@@ -95,11 +95,11 @@ def crop_name_region(
         img = Image.open(page_image_path)
         width, height = img.size
 
-        # Focus on the left-side name box (Họ và tên) - Extended width for long names
-        left = int(width * 0.10)
-        top = int(height * 0.05)
-        right = int(width * 0.52)
-        bottom = int(height * 0.15)
+        # Focus on the name box region - significantly expanded to avoid cutting off names
+        left = int(width * 0.02)
+        top = int(height * 0.02)
+        right = int(width * 0.65)
+        bottom = int(height * 0.25)
         
         cropped = img.crop((left, top, right, bottom))
 

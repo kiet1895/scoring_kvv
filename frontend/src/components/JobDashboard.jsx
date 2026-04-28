@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Clock, CheckCircle, AlertTriangle, XCircle, ChevronRight, Download, Trash2, BarChart2, Eye } from 'lucide-react';
-import { deleteJob, exportCSV, fetchJob } from '../api';
+import { FileText, Clock, CheckCircle, AlertTriangle, XCircle, ChevronRight, Download, Trash2, BarChart2, Eye, RotateCcw } from 'lucide-react';
+import { deleteJob, exportCSV, fetchJob, retryJob } from '../api';
 import toast from 'react-hot-toast';
 
 const STATUS_CONFIG = {
@@ -54,6 +54,13 @@ function JobRow({ job, onDeleted }) {
       toast.success('CSV exported');
     } catch { toast.error('Export failed'); }
     finally { setExporting(false); }
+  };
+
+  const handleRetry = async () => {
+    try {
+      await retryJob(job.job_id);
+      toast.success('Retrying failed students...');
+    } catch { toast.error('Failed to start retry'); }
   };
 
   return (
@@ -110,8 +117,15 @@ function JobRow({ job, onDeleted }) {
               Review
             </button>
           )}
-          {(job.status === 'completed' || job.status === 'needs_review') && (
+          {(job.status === 'completed' || job.status === 'needs_review' || job.status === 'failed') && (
             <>
+              <button
+                onClick={handleRetry}
+                className="w-8 h-8 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-400 hover:bg-orange-500/20 transition-colors flex items-center justify-center"
+                title="Retry failed students"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+              </button>
               <button
                 onClick={() => navigate(`/results/${job.job_id}`)}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500/15 border border-brand-500/30 text-brand-400 text-sm font-medium hover:bg-brand-500/25 transition-colors"

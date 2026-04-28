@@ -10,6 +10,7 @@ const api = axios.create({
 export const fetchJobs = () => api.get('/jobs').then(r => r.data);
 export const fetchJob  = (jobId) => api.get(`/jobs/${jobId}`).then(r => r.data);
 export const deleteJob = (jobId) => api.delete(`/jobs/${jobId}`).then(r => r.data);
+export const retryJob = (jobId) => api.post(`/jobs/${jobId}/retry`).then(r => r.data);
 export const fetchHealth = () => api.get('/health').then(r => r.data);
 export const generateStudentPDF = (jobId, studentId) => 
   api.post(`/jobs/${jobId}/students/${studentId}/generate-pdf`).then(r => r.data);

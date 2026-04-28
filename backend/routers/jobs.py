@@ -4,7 +4,7 @@ Jobs router — query job status and results.
 from __future__ import annotations
 from typing import List
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, BackgroundTasks
 
 import job_store
 from models import GradingJob, JobListItem, JobStatus, StudentResult
@@ -98,3 +98,26 @@ def generate_student_pdf_endpoint(job_id: str, student_id: str):
     job_store.update_job(job)
     
     return {"status": "success", "annotated_pdf_url": f"/{annotated_path.replace(os.sep, '/')}"}
+@router.post("/{job_id}/retry")
+def retry_failed_students_endpoint(job_id: str, background_tasks: BackgroundTasks):
+    """Restart grading only for students who failed (status was not set or error_message exists)."""
+    job = job_store.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    upload_dir = os.getenv("UPLOAD_DIR", "uploads")
+    pdf_path = os.path.join(upload_dir, "pdfs", job.filename)
+
+    from services.pipeline import run_grading_pipeline
+    background_tasks.add_task(
+        run_grading_pipeline,
+        job_id=job.job_id,
+        pdf_path=pdf_path,
+        answer_key=job.answer_key,
+        pages_per_student=job.pages_per_student,
+        model_name=job.model_name,
+        upload_dir=upload_dir,
+        retry_only_failed=True
+    )
+    
+    return {"message": "Retry started for failed students"}

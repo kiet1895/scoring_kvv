@@ -30,13 +30,11 @@ def run_grading_pipeline(
     pages_per_student: int,
     model_name: str,
     upload_dir: str,
+    retry_only_failed: bool = False,
 ) -> None:
     """
     Full grading pipeline run as a background task.
-    1. Split PDF into per-student image sets.
-    2. For each student: call Gemini AI (or demo), parse results.
-    3. For flagged questions: crop the region image.
-    4. Persist results into the job store.
+    Supports 'retry_only_failed' to only process students with error_message.
     """
     job = job_store.get_job(job_id)
     if not job:
@@ -47,7 +45,7 @@ def run_grading_pipeline(
         job.status = JobStatus.PROCESSING
         job_store.update_job(job)
 
-        # --- Step 1: Split PDF ---
+        # --- Step 1: Split PDF (Only if not retrying or pages missing) ---
         students_pages = split_pdf_into_students(
             pdf_path=pdf_path,
             pages_per_student=pages_per_student,
@@ -56,6 +54,12 @@ def run_grading_pipeline(
         )
 
         job.total_students = len(students_pages)
+        
+        # If retrying, we might already have some student objects. 
+        # We need to map students_pages to the right student index.
+        if not retry_only_failed or not job.students:
+            job.students = [None] * job.total_students
+        
         job_store.update_job(job)
 
         total_questions = len(answer_key)
@@ -67,15 +71,16 @@ def run_grading_pipeline(
         
         def process_student(idx_student_data):
             idx, (student_id, image_paths) = idx_student_data
+            error_msg = None
+            
             if DEMO_MODE:
                 ai_result = build_demo_result(student_id, answer_key)
             else:
                 ai_result = grade_student_paper(image_paths, answer_key, student_id, model_name=model_name)
-                # Respect RPM limits (with AI processing time, 1s is very safe)
-                import time
-                time.sleep(1)
+                # No more forced sleep for paid/optimized tier
 
-            if ai_result is None:
+            if ai_result is None or "error" in ai_result:
+                error_msg = ai_result.get("error") if ai_result else "Unknown AI error"
                 ai_result = _fallback_needs_review(student_id, answer_key)
 
             answer_sheet_page = get_answer_sheet_page(image_paths)
@@ -130,7 +135,7 @@ def run_grading_pipeline(
             )
 
             annotated_path = None
-            if flagged == 0:
+            if flagged == 0 and error_msg is None:
                 annotated_path = annotate_student_pdf(
                     pdf_path=pdf_path,
                     student_result=StudentResult(
@@ -154,15 +159,44 @@ def run_grading_pipeline(
                 flagged_count=flagged,
                 name_crop_image_path=name_crop_path,
                 annotated_pdf_path=annotated_path,
+                error_message=error_msg,
             )
 
         # Adjust parallel workers based on available API keys
-        from services.gemini_grader import _key_manager
-        n_workers = max(1, _key_manager.key_count())
+        # Read parallel workers from .env (default to 1 for safety)
+        max_workers_env = int(os.getenv("MAX_WORKERS", "1"))
+        n_workers = min(max_workers_env, job.total_students) if job.total_students > 0 else 1
         
-        completed = 0
+        # Prepare list of tasks (filter out already successful students if retrying)
+        student_results = [None] * job.total_students
+        tasks = []
+        already_completed_count = 0
+
+        # Pre-fill student_results with existing data if retrying
+        existing_students = {s.student_id: s for s in job.students if s}
+        
+        for idx, item in enumerate(students_pages):
+            student_id = item[0]
+            existing = existing_students.get(student_id)
+            
+            # If retry and student succeeded previously, skip them
+            if retry_only_failed and existing and existing.error_message is None and existing.results:
+                student_results[idx] = existing
+                already_completed_count += 1
+                if any(q.status == QuestionStatus.NEEDS_REVIEW for q in existing.results):
+                    has_review = True
+            else:
+                tasks.append((idx, item))
+
+        completed = already_completed_count
+        # Initialize progress
+        job.completed_students = completed
+        job.progress = int(completed / job.total_students * 100)
+        job.students = [s for s in student_results if s is not None]
+        job_store.update_job(job)
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as executor:
-            future_to_student = {executor.submit(process_student, item): item for item in enumerate(students_pages)}
+            future_to_student = {executor.submit(process_student, item): item for item in tasks}
             for future in concurrent.futures.as_completed(future_to_student):
                 idx, local_has_review, s_result = future.result()
                 student_results[idx] = s_result
