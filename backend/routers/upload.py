@@ -26,24 +26,34 @@ UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads")
 async def upload_batch(
     background_tasks: BackgroundTasks,
     pdf_file: UploadFile = File(..., description="PDF exam batch"),
-    answer_key_json: str = Form(
-        ...,
+    answer_key_json: Optional[str] = Form(
+        None,
         description='JSON string mapping question numbers to answers. e.g. {"1":"A","2":"B"}'
     ),
+    subject_id: Optional[str] = Form(None, description="ID of the subject to use for answer key"),
     pages_per_student: int = Form(2, description="How many PDF pages = one student paper"),
-    model_name: str = Form("gemini-1.5-flash", description="Gemini model version to use"),
+    model_name: str = Form("gemini-2.5-flash", description="Gemini model version to use"),
 ):
     """
     Upload a PDF batch and answer key to start grading.
     Returns immediately with a job_id; grading happens in the background.
     """
-    # Validate answer key
-    try:
-        answer_key: dict = json.loads(answer_key_json)
-        if not answer_key:
-            raise ValueError("Answer key is empty")
-    except (json.JSONDecodeError, ValueError) as e:
-        raise HTTPException(status_code=422, detail=f"Invalid answer_key_json: {e}")
+    # Determine answer key
+    answer_key: dict = {}
+    if subject_id:
+        import subject_store
+        subject = subject_store.get_subject(subject_id)
+        if not subject:
+            raise HTTPException(status_code=404, detail=f"Subject {subject_id} not found")
+        answer_key = subject.answer_key
+    elif answer_key_json:
+        try:
+            answer_key = json.loads(answer_key_json)
+        except json.JSONDecodeError as e:
+            raise HTTPException(status_code=422, detail=f"Invalid answer_key_json: {e}")
+    
+    if not answer_key:
+        raise HTTPException(status_code=422, detail="No answer key provided (either subject_id or answer_key_json is required)")
 
     # Persist uploaded PDF
     pdf_dir = Path(UPLOAD_DIR) / "pdfs"
@@ -61,6 +71,7 @@ async def upload_batch(
         status=JobStatus.PENDING,
         pages_per_student=pages_per_student,
         answer_key=answer_key,
+        subject_id=subject_id,
         model_name=model_name,
         created_at=datetime.now(timezone.utc).isoformat(),
     )

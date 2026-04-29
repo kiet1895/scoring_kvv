@@ -85,6 +85,7 @@ class GradingJob(BaseModel):
     created_at: Optional[str] = None
     pages_per_student: int = 2
     answer_key: dict = Field(default_factory=dict)  # {"1": "A", "2": "B", ...}
+    subject_id: Optional[str] = None
     model_name: str = "gemini-2.5-flash"
 
 
@@ -120,3 +121,14 @@ class ReviewOverrideResponse(BaseModel):
     new_score: float
     new_total: float
     message: str
+
+
+# ---------------------------------------------------------------------------
+# Subject Management
+# ---------------------------------------------------------------------------
+
+class Subject(BaseModel):
+    subject_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    answer_key: dict = Field(default_factory=dict)  # {"1": "A", "2": "B", ...}
+    created_at: Optional[str] = None

@@ -63,11 +63,11 @@ export default function ResultsPage() {
       <header className="relative border-b border-white/5 bg-navy-900/80 backdrop-blur-xl sticky top-0 z-40">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center gap-4">
           <button
-            onClick={() => navigate('/')}
+            onClick={() => navigate(job?.subject_id ? `/subject/${job.subject_id}` : '/')}
             className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm"
           >
             <ArrowLeft className="w-4 h-4" />
-            Dashboard
+            Về Dashboard
           </button>
           <div className="w-px h-5 bg-white/10" />
           <div className="flex items-center gap-2">

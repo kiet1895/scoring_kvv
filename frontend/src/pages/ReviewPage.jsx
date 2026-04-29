@@ -54,11 +54,11 @@ export default function ReviewPage() {
       <header className="relative border-b border-white/5 bg-navy-900/80 backdrop-blur-xl sticky top-0 z-40">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center gap-4">
           <button
-            onClick={() => navigate('/')}
+            onClick={() => navigate(data?.subject_id ? `/subject/${data.subject_id}` : '/')}
             className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm"
           >
             <ArrowLeft className="w-4 h-4" />
-            Dashboard
+            Về Dashboard
           </button>
           <div className="w-px h-5 bg-white/10" />
           <div className="flex items-center gap-2">
@@ -94,7 +94,7 @@ export default function ReviewPage() {
             <h2 className="text-2xl font-semibold text-white mb-2">No Flagged Questions</h2>
             <p className="text-slate-400 mb-6">All questions were auto-graded with high confidence.</p>
             <button
-              onClick={() => navigate('/')}
+              onClick={() => navigate(data?.subject_id ? `/subject/${data.subject_id}` : '/')}
               className="px-6 py-3 rounded-xl bg-brand-500 text-white font-semibold hover:bg-brand-400 transition-colors"
             >
               Back to Dashboard

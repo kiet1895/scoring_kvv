@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-load_dotenv()
+load_dotenv(override=True)
 
 # ---------------------------------------------------------------------------
 # App setup
@@ -43,11 +43,12 @@ app.mount(f"/{UPLOAD_DIR}", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 # Routers
 # ---------------------------------------------------------------------------
 
-from routers import upload, jobs, review  # noqa: E402
+from routers import upload, jobs, review, subjects  # noqa: E402
 
 app.include_router(upload.router)
 app.include_router(jobs.router)
 app.include_router(review.router)
+app.include_router(subjects.router)
 
 
 # ---------------------------------------------------------------------------

@@ -68,6 +68,10 @@ class KeyManager:
 
     def get_key(self):
         if not self.keys:
+            raw_keys = os.getenv("GEMINI_API_KEY", "")
+            self.keys = [k.strip() for k in raw_keys.split(",") if k.strip()]
+        
+        if not self.keys:
             return None
         key = self.keys[self.current_idx]
         self.current_idx = (self.current_idx + 1) % len(self.keys)
@@ -209,3 +213,83 @@ def build_demo_result(
         })
 
     return {"student_id": student_id, "results": results}
+
+
+def extract_answer_key(
+    image_paths: List[str],
+    model_name: Optional[str] = None,
+) -> Dict[str, str]:
+    """
+    Send a sample/template answer sheet to Gemini and extract the correct answers.
+    Returns a dict mapping question numbers to answers.
+    """
+    if not os.getenv("GEMINI_API_KEY"):
+        # Demo mode: return dummy key
+        return {"1": "A", "2": "B", "3": "C", "4": "D", "5": "A", "6": "B", "7": "C", "8": "D", "9": "A", "10": "B"}
+
+    _configure_gemini()
+    selected_model = model_name or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    
+    extraction_instruction = """
+    You are an expert exam key extractor with 100% precision.
+    Your task is to analyze the provided image of a CORRECT/SAMPLE answer sheet and extract the answer key.
+    
+    INSTRUCTIONS:
+    1. Scan the ENTIRE document from top to bottom, left to right.
+    2. Identify EVERY question number and its corresponding marked answer (A, B, C, or D).
+    3. Look for circles, ticks, X marks, or filled-in bubbles.
+    4. Do not miss any question. If you see a question number but no clear mark, use '?' as the answer.
+    5. Continue until you have reached the very last question on the page.
+    
+    Output ONLY valid JSON in this format:
+    {
+      "1": "A",
+      "2": "B",
+      "3": "C",
+      ...
+    }
+    """
+    
+    import time
+    from google.api_core.exceptions import ResourceExhausted
+
+    max_retries = 3
+    base_delay = 5
+
+    for attempt in range(max_retries):
+        try:
+            model = genai.GenerativeModel(
+                model_name=selected_model,
+                system_instruction=extraction_instruction,
+            )
+
+            parts_input = []
+            for img_path in image_paths:
+                img = Image.open(img_path)
+                parts_input.append(img)
+            
+            parts_input.append("Please extract EVERY question and its marked answer from this sample sheet. Ensure you do not stop until the end of the page. Use '?' if a question is unmarked.")
+
+            response = model.generate_content(
+                parts_input,
+                generation_config=genai.GenerationConfig(
+                    temperature=0.0,
+                    response_mime_type="application/json",
+                ),
+            )
+
+            raw_text = response.text.strip()
+            raw_text = re.sub(r"^```(?:json)?\n?", "", raw_text)
+            raw_text = re.sub(r"\n?```$", "", raw_text)
+            
+            return json.loads(raw_text)
+
+        except (ResourceExhausted, Exception) as e:
+            last_error = str(e)
+            if attempt < max_retries - 1 and ("429" in last_error or isinstance(e, ResourceExhausted)):
+                print(f"[Gemini] Quota hit during extraction. Retrying in {base_delay}s...")
+                time.sleep(base_delay)
+                base_delay *= 2
+                continue
+            print(f"[Gemini] Extraction error: {e}")
+            raise e

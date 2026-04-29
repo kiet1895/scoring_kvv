@@ -2,7 +2,7 @@
 Jobs router — query job status and results.
 """
 from __future__ import annotations
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from fastapi.responses import StreamingResponse
@@ -34,9 +34,14 @@ def _avg_score(job: GradingJob) -> float:
 
 
 @router.get("", response_model=List[JobListItem])
-def list_jobs():
-    """Return summary list of all grading jobs."""
+def list_jobs(subject_id: Optional[str] = None):
+    """Return summary list of all grading jobs, optionally filtered by subject."""
     jobs = job_store.list_jobs()
+    
+    # Filter by subject if provided
+    if subject_id:
+        jobs = [j for j in jobs if j.subject_id == subject_id]
+        
     items = []
     for job in jobs:
         items.append(

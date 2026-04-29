@@ -25,5 +25,6 @@ Thumbs.db
 
 # Runtime data
 backend/jobs.json
+backend/subjects.json
 uploads/
 *.pdf

@@ -2,11 +2,15 @@ import { useState, useEffect, useCallback } from 'react';
 import BatchUpload from '../components/BatchUpload';
 import JobDashboard from '../components/JobDashboard';
 import { fetchJobs, fetchHealth } from '../api';
-import { BookOpen, Cpu, Wifi, WifiOff, RefreshCw, ChevronDown, Bot } from 'lucide-react';
+import { BookOpen, Cpu, Wifi, WifiOff, RefreshCw, ChevronDown, Bot, ArrowLeft } from 'lucide-react';
+import { useParams, Link } from 'react-router-dom';
+import axios from 'axios';
 
 export default function Dashboard() {
+  const { subjectId } = useParams();
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [subject, setSubject] = useState(null);
   const [health, setHealth] = useState(null);
   const [polling, setPolling] = useState(false);
   const [selectedModel, setSelectedModel] = useState(() => {
@@ -23,14 +27,14 @@ export default function Dashboard() {
 
   const loadJobs = useCallback(async () => {
     try {
-      const data = await fetchJobs();
+      const data = await fetchJobs(subjectId);
       setJobs(data);
     } catch (err) {
       console.error('Failed to fetch jobs', err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [subjectId]);
 
   const loadHealth = useCallback(async () => {
     try {
@@ -41,10 +45,21 @@ export default function Dashboard() {
     }
   }, []);
 
+  const loadSubject = useCallback(async () => {
+    if (!subjectId) return;
+    try {
+      const { data } = await axios.get(`http://localhost:8001/subjects/${subjectId}`);
+      setSubject(data);
+    } catch (err) {
+      console.error('Failed to fetch subject', err);
+    }
+  }, [subjectId]);
+
   useEffect(() => {
     loadJobs();
     loadHealth();
-  }, [loadJobs, loadHealth]);
+    loadSubject();
+  }, [loadJobs, loadHealth, loadSubject]);
 
   // Poll every 2s when there are active jobs
   useEffect(() => {
@@ -88,12 +103,16 @@ export default function Dashboard() {
       <header className="relative border-b border-white/5 bg-navy-900/80 backdrop-blur-xl sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-500 to-purple-500 flex items-center justify-center shadow-lg glow-blue">
-              <BookOpen className="w-5 h-5 text-white" />
-            </div>
+            <Link to="/" className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-500 to-purple-500 flex items-center justify-center shadow-lg glow-blue hover:scale-105 transition-transform">
+              {subjectId ? <ArrowLeft className="w-5 h-5 text-white" /> : <BookOpen className="w-5 h-5 text-white" />}
+            </Link>
             <div>
-              <h1 className="text-xl font-bold text-gradient-blue">scoring_k</h1>
-              <p className="text-xs text-slate-500">AI Batch Exam Grader</p>
+              <h1 className="text-xl font-bold text-gradient-blue">
+                {subject ? subject.name : 'scoring_k'}
+              </h1>
+              <p className="text-xs text-slate-500">
+                {subjectId ? 'Phòng chấm thi' : 'AI Batch Exam Grader'}
+              </p>
             </div>
           </div>
 
@@ -169,7 +188,12 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 xl:grid-cols-[420px_1fr] gap-8 items-start">
           {/* Left: Upload panel */}
           <div className="xl:sticky xl:top-24">
-            <BatchUpload onJobCreated={handleJobCreated} modelName={selectedModel} />
+            <BatchUpload 
+              onJobCreated={handleJobCreated} 
+              modelName={selectedModel} 
+              subjectId={subjectId}
+              initialAnswerKey={subject?.answer_key}
+            />
           </div>
 
           {/* Right: Job list */}

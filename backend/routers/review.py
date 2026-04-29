@@ -74,7 +74,12 @@ def get_flagged_questions(job_id: str):
                         "current_score": q.score,
                     }
                 )
-    return {"job_id": job_id, "flagged_count": len(flagged), "items": flagged}
+    return {
+        "job_id": job_id, 
+        "subject_id": job.subject_id,
+        "flagged_count": len(flagged), 
+        "items": flagged
+    }
 
 
 @router.post("/{job_id}/override", response_model=ReviewOverrideResponse)

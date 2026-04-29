@@ -7,7 +7,10 @@ const api = axios.create({
 });
 
 // ── Jobs ──────────────────────────────────────────────────────────
-export const fetchJobs = () => api.get('/jobs').then(r => r.data);
+export const fetchJobs = (subjectId = null) => {
+  const url = subjectId ? `/jobs?subject_id=${subjectId}` : '/jobs';
+  return api.get(url).then(r => r.data);
+};
 export const fetchJob  = (jobId) => api.get(`/jobs/${jobId}`).then(r => r.data);
 export const deleteJob = (jobId) => api.delete(`/jobs/${jobId}`).then(r => r.data);
 export const retryJob = (jobId) => api.post(`/jobs/${jobId}/retry`).then(r => r.data);
@@ -30,6 +33,16 @@ export const uploadBatch = (formData, onProgress) =>
 export const fetchFlagged  = (jobId) => api.get(`/review/${jobId}/flagged`).then(r => r.data);
 export const submitOverride = (jobId, payload) =>
   api.post(`/review/${jobId}/override`, payload).then(r => r.data);
+
+// ── Subjects ──────────────────────────────────────────────────────
+export const fetchSubjects = () => api.get('/subjects').then(r => r.data);
+export const createSubject = (data) => api.post('/subjects', data).then(r => r.data);
+export const updateSubject = (sid, data) => api.patch(`/subjects/${sid}`, data).then(r => r.data);
+export const deleteSubject = (sid) => api.delete(`/subjects/${sid}`).then(r => r.data);
+export const extractKeyFromTemplate = (sid, formData) => 
+  api.post(`/subjects/${sid}/extract-key`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }).then(r => r.data);
 
 // ── Export (client-side CSV) ───────────────────────────────────────
 export const exportCSV = (job) => {
