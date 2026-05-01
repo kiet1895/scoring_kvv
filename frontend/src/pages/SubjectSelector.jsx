@@ -312,6 +312,7 @@ function AnswerKeyModal({ subject, onClose, onSave }) {
   const [localKey, setLocalKey] = useState({ ...subject.answer_key });
   const [localName, setLocalName] = useState(subject.name);
   const [bulkCount, setBulkCount] = useState(10);
+  const [newQNum, setNewQNum] = useState('');
   const [saving, setSaving] = useState(false);
   
   const handleSave = async () => {
@@ -341,8 +342,27 @@ function AnswerKeyModal({ subject, onClose, onSave }) {
     setLocalKey(nextKey);
   };
 
+  const addSpecificQuestion = () => {
+    if (!newQNum) return;
+    setLocalKey(prev => ({ ...prev, [newQNum]: '?' }));
+    setNewQNum('');
+  };
+
   const addQuestion = () => {
-    const nextQ = Object.keys(localKey).length + 1;
+    // Find first gap or next max
+    const keys = Object.keys(localKey).map(k => parseInt(k)).filter(k => !isNaN(k));
+    let nextQ = 1;
+    if (keys.length > 0) {
+      const max = Math.max(...keys);
+      // Check for gaps
+      for (let i = 1; i <= max; i++) {
+        if (!localKey[i]) {
+          nextQ = i;
+          break;
+        }
+      }
+      if (nextQ === 1 && localKey[1]) nextQ = max + 1;
+    }
     setLocalKey(prev => ({ ...prev, [nextQ]: '?' }));
   };
 
@@ -396,6 +416,34 @@ function AnswerKeyModal({ subject, onClose, onSave }) {
                 />
               </div>
             ))}
+            <button 
+              onClick={addQuestion}
+              className="border border-dashed border-white/10 rounded-2xl p-3 flex flex-col items-center justify-center gap-2 text-slate-500 hover:text-brand-400 hover:border-brand-400/50 transition-all hover:bg-brand-500/5"
+              title="Tự động thêm câu tiếp theo hoặc câu còn thiếu"
+            >
+              <Plus className="w-5 h-5" />
+              <span className="text-[10px] font-bold">Thêm câu</span>
+            </button>
+
+            <div className="flex flex-col gap-2 p-3 border border-dashed border-white/10 rounded-2xl bg-brand-500/5">
+              <div className="flex items-center gap-2">
+                <input 
+                  type="text" 
+                  placeholder="#"
+                  value={newQNum}
+                  onChange={(e) => setNewQNum(e.target.value.replace(/\D/g, ''))}
+                  className="w-10 bg-slate-800 border border-white/10 rounded-xl px-1 py-1 text-center text-sm font-bold text-white focus:border-brand-500 outline-none"
+                />
+                <button 
+                  onClick={addSpecificQuestion}
+                  className="bg-brand-500 hover:bg-brand-400 text-white p-2 rounded-xl transition-all"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+              <span className="text-[10px] font-bold text-brand-400 text-center uppercase">Chèn số</span>
+            </div>
+
             <div className="flex flex-col gap-2 p-3 border border-dashed border-white/10 rounded-2xl bg-white/2">
               <div className="flex items-center gap-2">
                 <input 
